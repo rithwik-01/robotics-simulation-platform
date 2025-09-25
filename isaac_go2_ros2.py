@@ -23,6 +23,7 @@ simulation_app = app_launcher.app
 import torch
 
 from go2.go2_env import Go2RSLEnvCfg, camera_follow
+import go2.go2_ctrl as go2_ctrl
 
 FILE_PATH = os.path.join(os.path.dirname(__file__), "cfg")
 @hydra.main(config_path=FILE_PATH, config_name="sim", version_base=None)
@@ -34,10 +35,8 @@ def run_simulator(cfg):
     go2_env_cfg.decimation = math.ceil(1./go2_env_cfg.sim.dt/cfg.freq)
     go2_env_cfg.sim.render_interval = go2_env_cfg.decimation
 
-    import gymnasium as gym
-    from isaaclab_rl.rsl_rl import RslRlVecEnvWrapper
-    env = gym.make("Isaac-Velocity-Rough-Unitree-Go2-v0", cfg=go2_env_cfg)
-    env = RslRlVecEnvWrapper(env)
+    go2_ctrl.init_base_vel_cmd(cfg.num_envs)
+    env, policy = go2_ctrl.get_rsl_rough_policy(go2_env_cfg)
 
     # Run simulation
     sim_step_dt = float(go2_env_cfg.sim.dt * go2_env_cfg.decimation)
@@ -45,8 +44,10 @@ def run_simulator(cfg):
     while simulation_app.is_running():
         start_time = time.time()
         with torch.inference_mode():
-            # hold zero joint targets until the locomotion policy is wired in
-            actions = torch.zeros(env.action_space.shape, device=env.unwrapped.device)
+            # control joints
+            actions = policy(obs)
+
+            # step the environment
             obs, _, _, _ = env.step(actions)
 
             # Camera follow
