@@ -23,6 +23,8 @@ simulation_app = app_launcher.app
 import torch
 
 from go2.go2_env import Go2RSLEnvCfg, camera_follow
+import omni
+import carb
 import go2.go2_ctrl as go2_ctrl
 
 FILE_PATH = os.path.join(os.path.dirname(__file__), "cfg")
@@ -37,6 +39,11 @@ def run_simulator(cfg):
 
     go2_ctrl.init_base_vel_cmd(cfg.num_envs)
     env, policy = go2_ctrl.get_rsl_rough_policy(go2_env_cfg)
+
+    # Keyboard control
+    system_input = carb.input.acquire_input_interface()
+    system_input.subscribe_to_keyboard_events(
+        omni.appwindow.get_default_app_window().get_keyboard(), go2_ctrl.sub_keyboard_event)
 
     # Run simulation
     sim_step_dt = float(go2_env_cfg.sim.dt * go2_env_cfg.decimation)
