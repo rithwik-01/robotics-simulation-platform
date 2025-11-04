@@ -23,6 +23,7 @@ simulation_app = app_launcher.app
 import torch
 
 from go2.go2_env import Go2RSLEnvCfg, camera_follow
+import env.sim_env as sim_env
 import omni
 import carb
 import go2.go2_ctrl as go2_ctrl
@@ -44,6 +45,16 @@ def run_simulator(cfg):
     system_input = carb.input.acquire_input_interface()
     system_input.subscribe_to_keyboard_events(
         omni.appwindow.get_default_app_window().get_keyboard(), go2_ctrl.sub_keyboard_event)
+
+    # Simulation environment
+    if (cfg.env_name == "warehouse"):
+        sim_env.create_warehouse_env() # warehouse
+    elif (cfg.env_name == "warehouse-forklifts"):
+        sim_env.create_warehouse_forklifts_env() # warehouse forklifts
+    elif (cfg.env_name == "warehouse-shelves"):
+        sim_env.create_warehouse_shelves_env() # warehouse shelves
+    elif (cfg.env_name == "full-warehouse"):
+        sim_env.create_full_warehouse_env() # full warehouse
 
     # Run simulation
     sim_step_dt = float(go2_env_cfg.sim.dt * go2_env_cfg.decimation)
