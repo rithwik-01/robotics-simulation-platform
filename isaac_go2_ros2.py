@@ -47,7 +47,13 @@ def run_simulator(cfg):
         omni.appwindow.get_default_app_window().get_keyboard(), go2_ctrl.sub_keyboard_event)
 
     # Simulation environment
-    if (cfg.env_name == "warehouse"):
+    if (cfg.env_name == "obstacle-dense"):
+        sim_env.create_obstacle_dense_env() # obstacles dense
+    elif (cfg.env_name == "obstacle-medium"):
+        sim_env.create_obstacle_medium_env() # obstacles medium
+    elif (cfg.env_name == "obstacle-sparse"):
+        sim_env.create_obstacle_sparse_env() # obstacles sparse
+    elif (cfg.env_name == "warehouse"):
         sim_env.create_warehouse_env() # warehouse
     elif (cfg.env_name == "warehouse-forklifts"):
         sim_env.create_warehouse_forklifts_env() # warehouse forklifts
