@@ -24,6 +24,7 @@ import torch
 
 from go2.go2_env import Go2RSLEnvCfg, camera_follow
 import env.sim_env as sim_env
+import go2.go2_sensors as go2_sensors
 import omni
 import carb
 import go2.go2_ctrl as go2_ctrl
@@ -61,6 +62,11 @@ def run_simulator(cfg):
         sim_env.create_warehouse_shelves_env() # warehouse shelves
     elif (cfg.env_name == "full-warehouse"):
         sim_env.create_full_warehouse_env() # full warehouse
+
+    # Sensor setup
+    sm = go2_sensors.SensorManager(cfg.num_envs)
+    lidar_annotators = sm.add_rtx_lidar()
+    cameras = sm.add_camera(cfg.freq)
 
     # Run simulation
     sim_step_dt = float(go2_env_cfg.sim.dt * go2_env_cfg.decimation)
