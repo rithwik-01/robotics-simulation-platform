@@ -1,5 +1,6 @@
 import os
 import hydra
+import rclpy
 import torch
 import time
 import math
@@ -28,6 +29,7 @@ import go2.go2_sensors as go2_sensors
 import omni
 import carb
 import go2.go2_ctrl as go2_ctrl
+import ros2.go2_ros2_bridge as go2_ros2_bridge
 
 FILE_PATH = os.path.join(os.path.dirname(__file__), "cfg")
 @hydra.main(config_path=FILE_PATH, config_name="sim", version_base=None)
@@ -68,6 +70,10 @@ def run_simulator(cfg):
     lidar_annotators = sm.add_rtx_lidar()
     cameras = sm.add_camera(cfg.freq)
 
+    # ROS2 Bridge
+    rclpy.init()
+    dm = go2_ros2_bridge.RobotDataManager(env, lidar_annotators, cameras, cfg)
+
     # Run simulation
     sim_step_dt = float(go2_env_cfg.sim.dt * go2_env_cfg.decimation)
     obs, _ = env.reset()
@@ -79,6 +85,8 @@ def run_simulator(cfg):
 
             # step the environment
             obs, _, _, _ = env.step(actions)
+
+            rclpy.spin_once(dm)
 
             # Camera follow
             if (cfg.camera_follow):
@@ -93,6 +101,8 @@ def run_simulator(cfg):
         rtf = min(1.0, sim_step_dt/elapsed_time)
         print(f"\rStep time: {actual_loop_time*1000:.2f}ms, Real Time Factor: {rtf:.2f}", end='', flush=True)
 
+    dm.destroy_node()
+    rclpy.shutdown()
     simulation_app.close()
 
 if __name__ == "__main__":
