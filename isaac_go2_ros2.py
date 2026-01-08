@@ -86,6 +86,8 @@ def run_simulator(cfg):
             # step the environment
             obs, _, _, _ = env.step(actions)
 
+            # # ROS2 data
+            dm.pub_ros2_data()
             rclpy.spin_once(dm)
 
             # Camera follow

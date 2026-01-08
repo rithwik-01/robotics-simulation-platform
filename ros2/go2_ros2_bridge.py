@@ -1,11 +1,13 @@
 import rclpy
 from rclpy.node import Node
-from geometry_msgs.msg import Twist, TransformStamped
+from nav_msgs.msg import Odometry
+from geometry_msgs.msg import PoseStamped, Twist, TransformStamped
 from tf2_ros import TransformBroadcaster
 from tf2_ros.static_transform_broadcaster import StaticTransformBroadcaster
 import omni
 import omni.graph.core as og
 import subprocess
+import time
 import go2.go2_ctrl as go2_ctrl
 
 ext_manager = omni.kit.app.get_app().get_extension_manager()
@@ -29,13 +31,24 @@ class RobotDataManager(Node):
         # ROS2 Broadcaster
         self.broadcaster = TransformBroadcaster(self)
 
+        # ROS2 Publisher
+        self.odom_pub = []
+        self.pose_pub = []
+
         # ROS2 Subscriber
         self.cmd_vel_sub = []
+        self.odom_pub.append(
+            self.create_publisher(Odometry, "unitree_go2/odom", 10))
+        self.pose_pub.append(
+            self.create_publisher(PoseStamped, "unitree_go2/pose", 10))
         self.cmd_vel_sub.append(
             self.create_subscription(Twist, "unitree_go2/cmd_vel",
             lambda msg: self.cmd_vel_callback(msg, 0), 10)
         )
 
+        # use wall time for odom pub
+        self.odom_pose_freq = 50.0
+        self.odom_pose_pub_time = time.time()
         self.create_static_transform()
 
 
@@ -114,6 +127,71 @@ class RobotDataManager(Node):
 
             # Publish the transform
             camera_broadcaster.sendTransform(base_cam_transform)
+
+    def publish_odom(self, base_pos, base_rot, base_lin_vel_b, base_ang_vel_b, env_idx):
+        odom_msg = Odometry()
+        odom_msg.header.stamp = self.get_clock().now().to_msg()
+        odom_msg.header.frame_id = "map"
+        odom_msg.child_frame_id = "base_link"
+        odom_msg.pose.pose.position.x = base_pos[0].item()
+        odom_msg.pose.pose.position.y = base_pos[1].item()
+        odom_msg.pose.pose.position.z = base_pos[2].item()
+        odom_msg.pose.pose.orientation.x = base_rot[1].item()
+        odom_msg.pose.pose.orientation.y = base_rot[2].item()
+        odom_msg.pose.pose.orientation.z = base_rot[3].item()
+        odom_msg.pose.pose.orientation.w = base_rot[0].item()
+        odom_msg.twist.twist.linear.x = base_lin_vel_b[0].item()
+        odom_msg.twist.twist.linear.y = base_lin_vel_b[1].item()
+        odom_msg.twist.twist.linear.z = base_lin_vel_b[2].item()
+        odom_msg.twist.twist.angular.x = base_ang_vel_b[0].item()
+        odom_msg.twist.twist.angular.y = base_ang_vel_b[1].item()
+        odom_msg.twist.twist.angular.z = base_ang_vel_b[2].item()
+        self.odom_pub[env_idx].publish(odom_msg)
+
+        # transform
+        map_base_trans = TransformStamped()
+        map_base_trans.header.stamp = self.get_clock().now().to_msg()
+        map_base_trans.header.frame_id = "map"
+        map_base_trans.child_frame_id = "unitree_go2/base_link"
+        map_base_trans.transform.translation.x = base_pos[0].item()
+        map_base_trans.transform.translation.y = base_pos[1].item()
+        map_base_trans.transform.translation.z = base_pos[2].item()
+        map_base_trans.transform.rotation.x = base_rot[1].item()
+        map_base_trans.transform.rotation.y = base_rot[2].item()
+        map_base_trans.transform.rotation.z = base_rot[3].item()
+        map_base_trans.transform.rotation.w = base_rot[0].item()
+        self.broadcaster.sendTransform(map_base_trans)
+
+    def publish_pose(self, base_pos, base_rot, env_idx):
+        pose_msg = PoseStamped()
+        pose_msg.header.stamp = self.get_clock().now().to_msg()
+        pose_msg.header.frame_id = "map"
+        pose_msg.pose.position.x = base_pos[0].item()
+        pose_msg.pose.position.y = base_pos[1].item()
+        pose_msg.pose.position.z = base_pos[2].item()
+        pose_msg.pose.orientation.x = base_rot[1].item()
+        pose_msg.pose.orientation.y = base_rot[2].item()
+        pose_msg.pose.orientation.z = base_rot[3].item()
+        pose_msg.pose.orientation.w = base_rot[0].item()
+        self.pose_pub[env_idx].publish(pose_msg)
+
+    def pub_ros2_data(self):
+        pub_odom_pose = False
+        dt_odom_pose = time.time() - self.odom_pose_pub_time
+        if (dt_odom_pose >= 1./self.odom_pose_freq):
+            pub_odom_pose = True
+
+        if (pub_odom_pose):
+            self.odom_pose_pub_time = time.time()
+            robot_data = self.env.unwrapped.scene["unitree_go2"].data
+            for i in range(self.num_envs):
+                self.publish_odom(robot_data.root_state_w[i, :3],
+                                robot_data.root_state_w[i, 3:7],
+                                robot_data.root_lin_vel_b[i],
+                                robot_data.root_ang_vel_b[i],
+                                i)
+                self.publish_pose(robot_data.root_state_w[i, :3],
+                                robot_data.root_state_w[i, 3:7], i)
 
     def cmd_vel_callback(self, msg, env_idx):
         go2_ctrl.base_vel_cmd_input[env_idx][0] = msg.linear.x
