@@ -6,6 +6,8 @@ from tf2_ros import TransformBroadcaster
 from tf2_ros.static_transform_broadcaster import StaticTransformBroadcaster
 import omni
 import omni.graph.core as og
+import omni.replicator.core as rep
+import omni.syntheticdata._syntheticdata as sd
 import subprocess
 import time
 import go2.go2_ctrl as go2_ctrl
@@ -50,6 +52,7 @@ class RobotDataManager(Node):
         self.odom_pose_freq = 50.0
         self.odom_pose_pub_time = time.time()
         self.create_static_transform()
+        self.create_camera_publisher()
 
 
     def create_ros_time_graph(self):
@@ -192,6 +195,68 @@ class RobotDataManager(Node):
                                 i)
                 self.publish_pose(robot_data.root_state_w[i, :3],
                                 robot_data.root_state_w[i, 3:7], i)
+
+    def create_camera_publisher(self):
+        if (self.cfg.sensor.enable_camera):
+            if (self.cfg.sensor.color_image):
+                self.pub_color_image()
+            if (self.cfg.sensor.depth_image):
+                self.pub_depth_image()
+
+    def pub_color_image(self):
+        for i in range(self.num_envs):
+            # The following code will link the camera's render product and publish the data to the specified topic name.
+            render_product = self.cameras[i]._render_product_path
+            step_size = 1
+            topic_name = "unitree_go2/front_cam/color_image"
+            frame_id = "unitree_go2/front_cam"
+            node_namespace = ""
+            queue_size = 1
+
+            rv = omni.syntheticdata.SyntheticData.convert_sensor_type_to_rendervar(sd.SensorType.Rgb.name)
+
+            writer = rep.writers.get(rv + "ROS2PublishImage")
+            writer.initialize(
+                frameId=frame_id,
+                nodeNamespace=node_namespace,
+                queueSize=queue_size,
+                topicName=topic_name,
+            )
+            writer.attach([render_product])
+
+            # Set step input of the Isaac Simulation Gate nodes upstream of ROS publishers to control their execution rate
+            gate_path = omni.syntheticdata.SyntheticData._get_node_path(
+                rv + "IsaacSimulationGate", render_product
+            )
+            og.Controller.attribute(gate_path + ".inputs:step").set(step_size)
+
+    def pub_depth_image(self):
+        for i in range(self.num_envs):
+            # The following code will link the camera's render product and publish the data to the specified topic name.
+            render_product = self.cameras[i]._render_product_path
+            step_size = 1
+            topic_name = "unitree_go2/front_cam/depth_image"
+            frame_id = "unitree_go2/front_cam"
+            node_namespace = ""
+            queue_size = 1
+
+            rv = omni.syntheticdata.SyntheticData.convert_sensor_type_to_rendervar(
+                                    sd.SensorType.DistanceToImagePlane.name
+                                )
+            writer = rep.writers.get(rv + "ROS2PublishImage")
+            writer.initialize(
+                frameId=frame_id,
+                nodeNamespace=node_namespace,
+                queueSize=queue_size,
+                topicName=topic_name
+            )
+            writer.attach([render_product])
+
+            # Set step input of the Isaac Simulation Gate nodes upstream of ROS publishers to control their execution rate
+            gate_path = omni.syntheticdata.SyntheticData._get_node_path(
+                rv + "IsaacSimulationGate", render_product
+            )
+            og.Controller.attribute(gate_path + ".inputs:step").set(step_size)
 
     def cmd_vel_callback(self, msg, env_idx):
         go2_ctrl.base_vel_cmd_input[env_idx][0] = msg.linear.x
