@@ -2,8 +2,12 @@ import rclpy
 from rclpy.node import Node
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import PoseStamped, Twist, TransformStamped
+from sensor_msgs.msg import Image
 from tf2_ros import TransformBroadcaster
 from tf2_ros.static_transform_broadcaster import StaticTransformBroadcaster
+import numpy as np
+from cv_bridge import CvBridge
+import cv2
 import omni
 import omni.graph.core as og
 import omni.replicator.core as rep
@@ -39,6 +43,8 @@ class RobotDataManager(Node):
 
         # ROS2 Subscriber
         self.cmd_vel_sub = []
+        self.semantic_seg_img_vis_pub = []
+        self.semantic_seg_img_sub = []
         self.odom_pub.append(
             self.create_publisher(Odometry, "unitree_go2/odom", 10))
         self.pose_pub.append(
@@ -46,6 +52,13 @@ class RobotDataManager(Node):
         self.cmd_vel_sub.append(
             self.create_subscription(Twist, "unitree_go2/cmd_vel",
             lambda msg: self.cmd_vel_callback(msg, 0), 10)
+        )
+        self.semantic_seg_img_vis_pub.append(
+            self.create_publisher(Image, "unitree_go2/front_cam/semantic_segmentation_image_vis", 10)
+        )
+        self.semantic_seg_img_sub.append(
+            self.create_subscription(Image, "/unitree_go2/front_cam/semantic_segmentation_image",
+            lambda msg: self.semantic_segmentation_callback(msg, 0), 10)
         )
 
         # use wall time for odom pub
@@ -202,6 +215,8 @@ class RobotDataManager(Node):
                 self.pub_color_image()
             if (self.cfg.sensor.depth_image):
                 self.pub_depth_image()
+            if (self.cfg.sensor.semantic_segmentation):
+                self.pub_semantic_image()
 
     def pub_color_image(self):
         for i in range(self.num_envs):
@@ -258,7 +273,58 @@ class RobotDataManager(Node):
             )
             og.Controller.attribute(gate_path + ".inputs:step").set(step_size)
 
+    def pub_semantic_image(self):
+        for i in range(self.num_envs):
+            # The following code will link the camera's render product and publish the data to the specified topic name.
+            render_product = self.cameras[i]._render_product_path
+            step_size = 1
+            topic_name = "unitree_go2/front_cam/semantic_segmentation_image"
+            label_topic_name = "unitree_go2/front_cam/semantic_segmentation_label"
+            frame_id = "unitree_go2/front_cam"
+            node_namespace = ""
+            queue_size = 1
+
+            rv = omni.syntheticdata.SyntheticData.convert_sensor_type_to_rendervar(
+                                    sd.SensorType.SemanticSegmentation.name
+                                )
+            writer = rep.writers.get("ROS2PublishSemanticSegmentation")
+            writer.initialize(
+                frameId=frame_id,
+                nodeNamespace=node_namespace,
+                queueSize=queue_size,
+                topicName=topic_name
+            )
+            writer.attach([render_product])
+
+            semantic_writer = rep.writers.get(
+               "SemanticSegmentationSD" + f"ROS2PublishSemanticLabels"
+            )
+            semantic_writer.initialize(
+                nodeNamespace=node_namespace,
+                queueSize=queue_size,
+                topicName=label_topic_name,
+            )
+            semantic_writer.attach([render_product])
+
+            # Set step input of the Isaac Simulation Gate nodes upstream of ROS publishers to control their execution rate
+            gate_path = omni.syntheticdata.SyntheticData._get_node_path(
+                rv + "IsaacSimulationGate", render_product
+            )
+            og.Controller.attribute(gate_path + ".inputs:step").set(step_size)
+
     def cmd_vel_callback(self, msg, env_idx):
         go2_ctrl.base_vel_cmd_input[env_idx][0] = msg.linear.x
         go2_ctrl.base_vel_cmd_input[env_idx][1] = msg.linear.y
         go2_ctrl.base_vel_cmd_input[env_idx][2] = msg.angular.z
+
+    def semantic_segmentation_callback(self, img, env_idx):
+        bridge = CvBridge()
+        semantic_image = bridge.imgmsg_to_cv2(img, desired_encoding='passthrough')
+        semantic_image_normalized = (semantic_image / semantic_image.max() * 255).astype(np.uint8)
+
+        # Apply a predefined colormap
+        color_mapped_image = cv2.applyColorMap(semantic_image_normalized, cv2.COLORMAP_JET)
+        # Convert to ROS Image
+        bridge = CvBridge()
+        image_msg = bridge.cv2_to_imgmsg(color_mapped_image, encoding='rgb8')
+        self.semantic_seg_img_vis_pub[env_idx].publish(image_msg)
