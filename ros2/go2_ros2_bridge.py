@@ -18,6 +18,7 @@ import go2.go2_ctrl as go2_ctrl
 
 ext_manager = omni.kit.app.get_app().get_extension_manager()
 ext_manager.set_extension_enabled_immediate("omni.isaac.ros2_bridge", True)
+from isaacsim.ros2.bridge import read_camera_info
 
 
 class RobotDataManager(Node):
@@ -217,6 +218,7 @@ class RobotDataManager(Node):
                 self.pub_depth_image()
             if (self.cfg.sensor.semantic_segmentation):
                 self.pub_semantic_image()
+            self.publish_camera_info()
 
     def pub_color_image(self):
         for i in range(self.num_envs):
@@ -310,6 +312,41 @@ class RobotDataManager(Node):
             gate_path = omni.syntheticdata.SyntheticData._get_node_path(
                 rv + "IsaacSimulationGate", render_product
             )
+            og.Controller.attribute(gate_path + ".inputs:step").set(step_size)
+
+    def publish_camera_info(self):
+        for i in range(self.num_envs):
+            # The following code will link the camera's render product and publish the data to the specified topic name.
+            render_product = self.cameras[i]._render_product_path
+            step_size = 1
+            topic_name = "unitree_go2/front_cam/info"
+            queue_size = 1
+            node_namespace = ""
+            frame_id = self.cameras[i].prim_path.split("/")[-1] # This matches what the TF tree is publishing.
+
+            writer = rep.writers.get("ROS2PublishCameraInfo")
+            camera_info = read_camera_info(render_product_path=render_product)
+            writer.initialize(
+                frameId=frame_id,
+                nodeNamespace=node_namespace,
+                queueSize=queue_size,
+                topicName=topic_name,
+                width=camera_info["width"],
+                height=camera_info["height"],
+                projectionType=camera_info["projectionType"],
+                k=camera_info["k"].reshape([1, 9]),
+                r=camera_info["r"].reshape([1, 9]),
+                p=camera_info["p"].reshape([1, 12]),
+                physicalDistortionModel=camera_info["physicalDistortionModel"],
+                physicalDistortionCoefficients=camera_info["physicalDistortionCoefficients"],
+            )
+            writer.attach([render_product])
+
+            gate_path = omni.syntheticdata.SyntheticData._get_node_path(
+                "PostProcessDispatch" + "IsaacSimulationGate", render_product
+            )
+
+            # Set step input of the Isaac Simulation Gate nodes upstream of ROS publishers to control their execution rate
             og.Controller.attribute(gate_path + ".inputs:step").set(step_size)
 
     def cmd_vel_callback(self, msg, env_idx):
