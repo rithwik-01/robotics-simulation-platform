@@ -2,7 +2,8 @@ import rclpy
 from rclpy.node import Node
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import PoseStamped, Twist, TransformStamped
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import PointCloud2, PointField, Image
+from sensor_msgs_py import point_cloud2
 from tf2_ros import TransformBroadcaster
 from tf2_ros.static_transform_broadcaster import StaticTransformBroadcaster
 import numpy as np
@@ -41,6 +42,7 @@ class RobotDataManager(Node):
         # ROS2 Publisher
         self.odom_pub = []
         self.pose_pub = []
+        self.lidar_pub = []
 
         # ROS2 Subscriber
         self.cmd_vel_sub = []
@@ -50,6 +52,9 @@ class RobotDataManager(Node):
             self.create_publisher(Odometry, "unitree_go2/odom", 10))
         self.pose_pub.append(
             self.create_publisher(PoseStamped, "unitree_go2/pose", 10))
+        self.lidar_pub.append(
+            self.create_publisher(PointCloud2, "unitree_go2/lidar/point_cloud", 10)
+        )
         self.cmd_vel_sub.append(
             self.create_subscription(Twist, "unitree_go2/cmd_vel",
             lambda msg: self.cmd_vel_callback(msg, 0), 10)
@@ -62,9 +67,11 @@ class RobotDataManager(Node):
             lambda msg: self.semantic_segmentation_callback(msg, 0), 10)
         )
 
-        # use wall time for odom pub
+        # use wall time for lidar and odom pub
         self.odom_pose_freq = 50.0
+        self.lidar_freq = 15.0
         self.odom_pose_pub_time = time.time()
+        self.lidar_pub_time = time.time()
         self.create_static_transform()
         self.create_camera_publisher()
 
@@ -192,11 +199,28 @@ class RobotDataManager(Node):
         pose_msg.pose.orientation.w = base_rot[0].item()
         self.pose_pub[env_idx].publish(pose_msg)
 
+    def publish_lidar_data(self, points, env_idx):
+        point_cloud = PointCloud2()
+        point_cloud.header.frame_id = "unitree_go2/lidar_frame"
+        point_cloud.header.stamp = self.get_clock().now().to_msg()
+        fields = [
+            PointField(name='x', offset=0, datatype=PointField.FLOAT32, count=1),
+            PointField(name='y', offset=4, datatype=PointField.FLOAT32, count=1),
+            PointField(name='z', offset=8, datatype=PointField.FLOAT32, count=1),
+        ]
+        point_cloud = point_cloud2.create_cloud(point_cloud.header, fields, points)
+        self.lidar_pub[env_idx].publish(point_cloud)
+
     def pub_ros2_data(self):
         pub_odom_pose = False
+        pub_lidar = False
         dt_odom_pose = time.time() - self.odom_pose_pub_time
+        dt_lidar = time.time() - self.lidar_pub_time
         if (dt_odom_pose >= 1./self.odom_pose_freq):
             pub_odom_pose = True
+
+        if (dt_lidar >= 1./self.lidar_freq):
+            pub_lidar = True
 
         if (pub_odom_pose):
             self.odom_pose_pub_time = time.time()
@@ -209,6 +233,11 @@ class RobotDataManager(Node):
                                 i)
                 self.publish_pose(robot_data.root_state_w[i, :3],
                                 robot_data.root_state_w[i, 3:7], i)
+        if (self.cfg.sensor.enable_lidar):
+            if (pub_lidar):
+                self.lidar_pub_time = time.time()
+                for i in range(self.num_envs):
+                    self.publish_lidar_data(self.lidar_annotators[i].get_data()["data"].reshape(-1, 3), i)
 
     def create_camera_publisher(self):
         if (self.cfg.sensor.enable_camera):
