@@ -276,7 +276,9 @@ class RobotDataManager(Node):
             if (pub_lidar):
                 self.lidar_pub_time = time.time()
                 for i in range(self.num_envs):
-                    self.publish_lidar_data(self.lidar_annotators[i].get_data()["data"].reshape(-1, 3), i)
+                    lidar_data = self.lidar_annotators[i].get_data()
+                    if (lidar_data is not None and "data" in lidar_data):
+                        self.publish_lidar_data(lidar_data["data"].reshape(-1, 3), i)
 
     def create_camera_publisher(self):
         if (self.cfg.sensor.enable_camera):

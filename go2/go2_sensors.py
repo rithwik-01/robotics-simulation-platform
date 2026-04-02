@@ -22,7 +22,7 @@ class SensorManager:
             )
 
             annotator = rep.AnnotatorRegistry.get_annotator("RtxSensorCpuIsaacCreateRTXLidarScanBuffer")
-            hydra_texture = rep.create.render_product(sensor.GetPath(), [1, 1], name="Isaac")
+            hydra_texture = rep.create.render_product(sensor.GetPath(), [1, 1], name=f"Isaac_{env_idx}")
             annotator.attach(hydra_texture.path)
             lidar_annotators.append(annotator)
         return lidar_annotators
