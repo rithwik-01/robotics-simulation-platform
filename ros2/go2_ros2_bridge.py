@@ -66,7 +66,7 @@ class RobotDataManager(Node):
                     lambda msg: self.cmd_vel_callback(msg, 0), 10)
                 )
                 self.semantic_seg_img_sub.append(
-                    self.create_subscription(Image, "/unitree_go2/front_cam/semantic_segmentation_image",
+                    self.create_subscription(Image, "unitree_go2/front_cam/semantic_segmentation_image",
                     lambda msg: self.semantic_segmentation_callback(msg, 0), 10)
                 )
             else:
@@ -85,7 +85,7 @@ class RobotDataManager(Node):
                     lambda msg, env_idx=i: self.cmd_vel_callback(msg, env_idx), 10)
                 )
                 self.semantic_seg_img_sub.append(
-                    self.create_subscription(Image, f"/unitree_go2_{i}/front_cam/semantic_segmentation_image",
+                    self.create_subscription(Image, f"unitree_go2_{i}/front_cam/semantic_segmentation_image",
                     lambda msg, env_idx=i: self.semantic_segmentation_callback(msg, env_idx), 10)
                 )
 
@@ -187,7 +187,7 @@ class RobotDataManager(Node):
         odom_msg.header.stamp = self.get_clock().now().to_msg()
         odom_msg.header.frame_id = "map"
         if (self.num_envs == 1):
-            odom_msg.child_frame_id = "base_link"
+            odom_msg.child_frame_id = "unitree_go2/base_link"
         else:
             odom_msg.child_frame_id = f"unitree_go2_{env_idx}/base_link"
         odom_msg.pose.pose.position.x = base_pos[0].item()
@@ -408,7 +408,10 @@ class RobotDataManager(Node):
                 topic_name = f"unitree_go2_{i}/front_cam/info"
             queue_size = 1
             node_namespace = ""
-            frame_id = self.cameras[i].prim_path.split("/")[-1] # This matches what the TF tree is publishing.
+            if (self.num_envs == 1):
+                frame_id = "unitree_go2/front_cam"
+            else:
+                frame_id = f"unitree_go2_{i}/front_cam"
 
             writer = rep.writers.get("ROS2PublishCameraInfo")
             camera_info = read_camera_info(render_product_path=render_product)
