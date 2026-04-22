@@ -1,9 +1,16 @@
 defaults:
   - _self_
 
-num_envs: 1 # number of robots; values > 1 namespace topics per robot
-freq: 40 # can only be divisible by 200
+# Number of simulated robots. Values greater than 1 namespace
+# topics and frames per robot as unitree_go2_{i}/...
+num_envs: 1
+# Control frequency in Hz. Must divide 200 evenly (sim dt is 0.005 s).
+freq: 40
+# Follow the first robot with the viewport camera.
 camera_follow: True
+# Simulation scene. One of: obstacle-dense, obstacle-medium,
+# obstacle-sparse, warehouse, warehouse-forklifts,
+# warehouse-shelves, full-warehouse.
 env_name: obstacle-dense
 
 sensor:

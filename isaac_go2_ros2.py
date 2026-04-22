@@ -8,7 +8,7 @@ import argparse
 from isaaclab.app import AppLauncher
 
 # add argparse arguments
-parser = argparse.ArgumentParser(description="Tutorial on running the cartpole RL environment.")
+parser = argparse.ArgumentParser(description="Unitree Go2 robotics simulation with Isaac Sim and ROS 2.")
 
 # append AppLauncher cli args
 AppLauncher.add_app_launcher_args(parser)
