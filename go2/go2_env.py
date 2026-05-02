@@ -160,7 +160,6 @@ class Go2RSLEnvCfg(ManagerBasedRLEnvCfg):
         self.sim.render_interval = self.decimation
         self.sim.disable_contact_processing = True
         self.sim.render.antialiasing_mode = None
-        # self.sim.physics_material = self.scene.terrain.physics_material
 
         # settings for rsl env control
         self.episode_length_s = 20.0 # can be ignored

@@ -21,8 +21,6 @@ simulation_app = app_launcher.app
 
 """Rest everything follows."""
 
-import torch
-
 from go2.go2_env import Go2RSLEnvCfg, camera_follow
 import env.sim_env as sim_env
 import go2.go2_sensors as go2_sensors
@@ -86,7 +84,7 @@ def run_simulator(cfg):
             # step the environment
             obs, _, _, _ = env.step(actions)
 
-            # # ROS2 data
+            # ROS2 data
             dm.pub_ros2_data()
             rclpy.spin_once(dm)
 
