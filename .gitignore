@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+.env_isaaclab/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# ROS 2 workspaces (generated, never committed)
+build/
+install/
+log/
+
+# Hydra outputs
+outputs/
+multirun/
+
+# Logs and caches
+*.log
+.cache/
+
+# Development tools
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Operating systems
+.DS_Store
+Thumbs.db
+
+# Local environment files with secrets
+.env
+.env.local
